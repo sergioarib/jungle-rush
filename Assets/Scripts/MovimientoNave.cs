@@ -39,23 +39,59 @@ public class MovimientoNave : MonoBehaviour
     [Header("Menús")]
     public GameObject menuInicio;
     public GameObject panelDerrota;
+    public GameObject panelPausa;
     public TextMeshProUGUI textoPuntosFinal;
+    public TextMeshProUGUI textoRecordFinal;
+    public TextMeshProUGUI textoRecordInicio;
 
     private bool puedePuntuar = false;
     private int puntosPorMonedas = 0;
+    private bool estaPausado = false;
+    // Variable estática para recordar si venimos de un "Retry"
+    private static bool saltarMenuInicio = false;
 
     void Start()
     {
-        Time.timeScale = 0f; // Juego pausado al empezar
-        menuInicio.SetActive(true);
+        // Si venimos de pulsar RETRY en el Game Over
+        if (saltarMenuInicio)
+        {
+            saltarMenuInicio = false; // Reseteamos la bandera para la próxima vez
+            menuInicio.SetActive(false);
+            Time.timeScale = 1f; // Reanudamos el tiempo
+            
+            if (camaraPrincipal != null) offsetOriginalCamara = camaraPrincipal.transform.localPosition;
+            
+            StartCoroutine(CuentaAtrasInicio()); // Empieza la cuenta atrás directo
+        }
+        else
+        {
+            Time.timeScale = 0f; // Juego pausado al empezar
+            menuInicio.SetActive(true);
 
-        puedePuntuar = false;
-        if (camaraPrincipal != null) offsetOriginalCamara = camaraPrincipal.transform.localPosition;        
+            // Cargar récord guardado al abrir el juego
+            int recordActual = PlayerPrefs.GetInt("HighScore", 0);
+            if (textoRecordInicio != null)
+            {
+                textoRecordInicio.text = "High Score: " + recordActual;
+            }
+
+            puedePuntuar = false;
+            if (camaraPrincipal != null) offsetOriginalCamara = camaraPrincipal.transform.localPosition;        
+        }
     }
 
     
     void Update()
     {
+        // Pausar y reanudar el juego con Escape o P
+        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P))
+        {
+            if (panelDerrota.activeSelf || menuInicio.activeSelf) return; // No pausar en menús
+
+            if (estaPausado) ReanudarJuego();
+            else PausarJuego();
+        }
+
         float movH = Input.GetAxis("Horizontal");
         float movV = Input.GetAxis("Vertical");
 
@@ -152,13 +188,25 @@ public class MovimientoNave : MonoBehaviour
 
     void MostrarPantallaDerrota()
     {
-        // Pausamos el tiempo aquí, después de ver la explosión y la sacudida
         Time.timeScale = 0f;
         panelDerrota.SetActive(true);
-        textoPuntos.text = "";
+        if (textoPuntos != null) textoPuntos.text = "";
         
-        // Mostramos la puntuación que calculaste en ActualizarPuntuacion
-        textoPuntosFinal.text = "Puntuación final: " + (Mathf.FloorToInt(transform.position.z - posicionZInicial) + puntosPorMonedas);
+        int puntosTotales = Mathf.FloorToInt(transform.position.z - posicionZInicial) + puntosPorMonedas;
+        if (textoPuntosFinal != null) textoPuntosFinal.text = "Score: " + puntosTotales;
+
+        int recordAnterior = PlayerPrefs.GetInt("HighScore", 0);
+
+        if (puntosTotales > recordAnterior)
+        {
+            PlayerPrefs.SetInt("HighScore", puntosTotales);
+            PlayerPrefs.Save();
+            if (textoRecordFinal != null) textoRecordFinal.text = "NEW HIGH SCORE!";
+        }
+        else
+        {
+            if (textoRecordFinal != null) textoRecordFinal.text = "HIGH SCORE: " + recordAnterior;
+        }
     }
 
 
@@ -169,9 +217,15 @@ public class MovimientoNave : MonoBehaviour
         StartCoroutine(CuentaAtrasInicio()); // Empieza tu cuenta atrás de 3s
     }
 
-    public void ReiniciarJuego()
+    public void BotonRetry() {
+        saltarMenuInicio = true; // Indicamos que venimos de un Retry
+        Time.timeScale = 1f; // Arranca el juego
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    public void VolverMenu()
     {
-        // IMPORTANTE: Resetear el tiempo antes de cargar
+        saltarMenuInicio = false; // Nos aseguramos de que no se salte el menú
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
@@ -187,6 +241,20 @@ public class MovimientoNave : MonoBehaviour
         #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
         #endif
+    }
+
+    public void PausarJuego()
+    {
+        estaPausado = true;
+        Time.timeScale = 0f;
+        if (panelPausa != null) panelPausa.SetActive(true);
+    }
+
+    public void ReanudarJuego()
+    {
+        estaPausado = false;
+        Time.timeScale = 1f;
+        if (panelPausa != null) panelPausa.SetActive(false);
     }
 
     // -------------- Corrutinas --------------
